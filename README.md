@@ -1,4 +1,5 @@
 # sync_delete
+
 Delete files in sync between two (or more) folders 
 
 This guy here is a small project that I've coded in a day-ish to cover a need I've just made up in order to not start the big projects I have in mind. 
