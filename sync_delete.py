@@ -94,7 +94,7 @@ def update_move_list(move_list, base_path, relative_path=None):
     for dirname, dirs, files in os.walk(full_path):
 
         for dir in dirs:
-            if dir in exclusions:
+            if dir in exclusions or dir == recycle_folder:
                 continue
 
             if relative_path:
