@@ -29,8 +29,8 @@ from datetime import datetime
 # the paths from an external file.
 
 base_paths = [
-    'C:\\Users\\[username]\\Documents\\folder1',
-    'C:\\Users\\[username]\\Documents\\folder2'
+    'C:\\Users\\sercio\\Documents\\dev\\test1\\',
+    'C:\\Users\\sercio\\Documents\\dev\\test2\\'
     ]
 
 # Tarama işleminden muaf tutulmasını istediğiniz dosya ya da dizin
@@ -66,30 +66,51 @@ def trim_base_path(path, base_path):
 
 def is_to_move(name):
     """Return True if name is prefixed with killcode. Otherwise return False"""
-    return name[-kc_length:] == killcode
+
+    filename, ext = os.path.splitext(name)
+
+    return filename[-kc_length:] == killcode
 
 
 def strip_suffix(name):
     """Strip suffix if exists"""
 
-    if is_to_move(name):
-        return name[:-kc_length]
+    filename, ext = os.path.splitext(name)
+
+    if is_to_move(filename):
+        return filename[:-kc_length] + ext
     else:
         return name
 
 
+def build_path(base_path=None, relative_path=None, filename=None):
+
+    path = ''
+
+    if base_path:
+        path = base_path
+
+    if relative_path:
+        path = os.path.join(path, relative_path)
+
+    if filename:
+        path = os.path.join(path, filename)
+
+    return path
+
+
 def update_move_list(move_list, base_path, relative_path=None):
-    """Update the passed kill list with the items on the path provided"""
+    """
+    Update the passed kill list with the items on the path provided
+
+    File / folder names in the move list are always stripped off the killcode
+    """
 
     # stores relative paths to the subdirectories
     # to be scanned
     dirs_to_walk = []
 
-    if relative_path:
-        full_path = os.path.join(base_path, relative_path)
-
-    else:
-        full_path = base_path
+    full_path = build_path(base_path, relative_path)
 
     for dirname, dirs, files in os.walk(full_path):
 
@@ -97,43 +118,22 @@ def update_move_list(move_list, base_path, relative_path=None):
             if dir in exclusions or dir == recycle_folder:
                 continue
 
-            if relative_path:
-                cur_dir_rel_path = os.path.join(relative_path, dir)
-            else:
-                cur_dir_rel_path = dir
+            cur_dir_rel_path = build_path(
+                relative_path=relative_path, filename=dir)
             dirs_to_walk.append(cur_dir_rel_path)
 
             if is_to_move(dir):
-                # append the suffixed path
-                move_list.append(cur_dir_rel_path)
-
-                # then append the path stripped from the suffix
-                # because that's how it exists on the other folders
-                move_list.append(cur_dir_rel_path[:-kc_length])
+                move_list.append((relative_path, strip_suffix(dir)))
 
         for file in files:
             if file in exclusions:
                 continue
 
-            if relative_path:
-                cur_file_rel_path = os.path.join(relative_path, file)
-            else:
-                cur_file_rel_path = file
+            cur_file_rel_path = build_path(
+                relative_path=relative_path, filename=file)
 
-            filename, extension = os.path.splitext(file)
-            if is_to_move(filename):
-                # append the suffixed path
-                move_list.append(cur_file_rel_path)
-
-                # then append the path stripped from the suffix
-                # because that's how it exists on the other folders
-                filename_wo_pfx = filename[:-kc_length] + extension
-                if relative_path:
-                    cur_file_path_wo_pfx = os.path.join(
-                        relative_path, filename_wo_pfx)
-                else:
-                    cur_file_path_wo_pfx = filename_wo_pfx
-                move_list.append(cur_file_path_wo_pfx)
+            if is_to_move(file):
+                move_list.append((relative_path, strip_suffix(file)))
 
         # Then iterate through directories
         for dir in dirs_to_walk:
@@ -154,22 +154,35 @@ def move_targets(base_paths, move_list):
     while len(move_list):
         entry = move_list.pop()
         for bp in base_paths:
-            recycle_path = os.path.join(bp, recycle_folder)
+
+            # prepare the recycle path
+            recycle_path = build_path(bp, recycle_folder)
             Path(recycle_path).mkdir(parents=True, exist_ok=True)
+
+            # prepare the datetime suffix
             now = datetime.now()
             now = now.strftime('%Y-%m-%d-%H-%M-%S')
 
-            filepath = os.path.join(bp, entry)
-            filename, extension = os.path.splitext(entry)
-            filename = strip_suffix(filename)
+            # prepare file / folder info
+            (relative_path, filename_full) = entry
+            filename, extension = os.path.splitext(filename_full)
+
+            # check if file exists with the killcode or without it
+            filepath_full = build_path(bp, relative_path, filename_full)
+            if not os.path.exists(filepath_full):
+                filename_w_kc = filename + killcode + extension
+                filepath_full = build_path(bp, relative_path, filename_w_kc)
+
             filename_new = filename + '_' + now
             if extension:
                 filename_new += extension
-            filepath_new = os.path.join(recycle_path, filename_new)
+
+            filepath_new = build_path(
+                recycle_path, relative_path, filename_new)
 
             try:
                 os.makedirs(os.path.dirname(filepath_new), exist_ok=True)
-                shutil.move(filepath, filepath_new)
+                shutil.move(filepath_full, filepath_new)
             except:
                 pass
 
